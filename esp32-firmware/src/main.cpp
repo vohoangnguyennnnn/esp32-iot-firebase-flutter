@@ -12,14 +12,14 @@
 #include <WiFiUdp.h>
 #include <time.h>
 #include <EEPROM.h>
-#include <WiFiManager.h>   // portal ESP_001_SET (192.168.4.1)
+#include <WiFiManager.h>  
 
-// =================== DEVICE / FIREBASE PATH ==================
+//  DEVICE / FIREBASE PATH 
 const char* DEVICE_ID = "ESP_001";
 String fbBase;
-// =================== FIREBASE =============================
-#define API_KEY      "AIzaSyC6Yjv9R1s883ajaZgs_0i65r6QEUa3Cpw"
-#define DATABASE_URL "https://iot1-fe111-default-rtdb.firebaseio.com"
+//  FIREBASE 
+#define API_KEY      "YOUR_API_KEY"
+#define DATABASE_URL "https://your-project-id.firebaseio.com"
 
 FirebaseData fbdo;
 FirebaseAuth auth;
@@ -29,21 +29,19 @@ bool firebaseStarted = false;
 unsigned long lastFirebaseTry = 0;
 constexpr unsigned long FIREBASE_RETRY_MS = 5000;
 
-// =================== LCD I2C ================================
+//  LCD I2C 
 hd44780_I2Cexp lcd;
-
-// =================== I2C pins (ESP32) =======================
 constexpr uint8_t I2C_SDA = 21;
 constexpr uint8_t I2C_SCL = 22;
 
-// =================== DHT ================================
+//  DHT 
 constexpr uint8_t DHTPIN  = 14;
 constexpr uint8_t DHTTYPE = DHT22;
 DHT dht(DHTPIN, DHTTYPE);
 float h = 0, t = 0;
 bool dhtOK = true;
 
-// =================== RELAYS ==============================
+//  RELAYS 
 constexpr uint8_t RELAY1_PIN = 23;
 constexpr uint8_t RELAY2_PIN = 19;
 constexpr uint8_t RELAY_ACTIVE_LEVEL = HIGH;
@@ -55,13 +53,13 @@ static inline bool relayRead(uint8_t pin) {
   return (digitalRead(pin) == RELAY_ACTIVE_LEVEL);
 }
 
-// =================== LED HEARTBEAT =======================
-constexpr uint8_t LED_PIN = 2; // GPIO2
+//  LED HEARTBEAT 
+constexpr uint8_t LED_PIN = 2; 
 unsigned long lastLedToggle = 0;
 bool ledState = false;
-constexpr unsigned long LED_BLINK_MS = 500; // 1Hz (500ms toggle)
+constexpr unsigned long LED_BLINK_MS = 500; 
 
-// =================== TIMERS ===============================
+//  TIMERS 
 unsigned long lastLCD        = 0;
 unsigned long lastFB         = 0;
 unsigned long lastRelayPoll  = 0;
@@ -86,20 +84,20 @@ constexpr unsigned long WIFI_RETRY_INTERVAL    = 10000;
 
 
 
-// =================== WIFI PORTAL (Flutter RESET_WIFI) ==========
+// WIFI PORTAL (Flutter RESET_WIFI) 
 static constexpr const char* PORTAL_SSID = "ESP_001_SET";
-static constexpr const char* PORTAL_PASS = "";          // để trống
-constexpr unsigned long PORTAL_TIMEOUT_S = 180;         // 3 phút
+static constexpr const char* PORTAL_PASS = "";        
+constexpr unsigned long PORTAL_TIMEOUT_S = 180;       
 
 String fbResetWifiPath; // "/DEVICES/ESP_001/COMMAND/RESET_WIFI"
 
-// =================== NTP ================================
+//  NTP 
 const long utcOffsetInSeconds = 7 * 3600;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "asia.pool.ntp.org", utcOffsetInSeconds);
 char daysOfTheWeek[7][12] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
-// =================== STATE ==============================
+//  STATE 
 bool wifiOK = false;
 bool wifiConnecting = false;
 
@@ -114,7 +112,7 @@ float tempSetpoint     = 30.0;
 float lastTempSetpoint = 30.0;
 constexpr float TEMP_HYST = 0.5;
 
-// =================== STATS (MIN/MAX) ======================
+// STATS (MIN/MAX) 
 // min/max theo NGÀY: reset khi đổi ngày (theo NTP local time)
 float tMinStat =  9999.0f;
 float tMaxStat = -9999.0f;
@@ -124,7 +122,6 @@ float hMaxStat = -9999.0f;
 int lastDateKey = -1; // yyyymmdd, -1 nghĩa là chưa có ngày
 
 static inline void statsResetForNewDay(float tt, float hh) {
-  // nếu có dữ liệu hợp lệ thì set min/max = current
   tMinStat = tt;
   tMaxStat = tt;
   hMinStat = hh;
@@ -138,28 +135,26 @@ static inline void statsUpdate(float tt, float hh) {
   if (hh > hMaxStat) hMaxStat = hh;
 }
 
-// =================== LCD MODE ===========================
+//  LCD MODE 
 enum LcdMode { LCD_MAIN, LCD_INFO };
 LcdMode lcdMode = LCD_MAIN;
 unsigned long lcdInfoExpire = 0;
 String lcdInfoL1, lcdInfoL2;
 
-// =================== EEPROM (chỉ lưu config) =============
+//  EEPROM 
 #define EEPROM_SIZE          64
 const uint32_t EEPROM_MAGIC = 0xDEADBEEF;
 #define EEPROM_ADDR_MAGIC        0
 #define EEPROM_ADDR_SETPOINT     4
 #define EEPROM_ADDR_AUTOMODE     8
 
-// =================== CUSTOM ICONS =======================
+//  CUSTOM ICONS 
 byte iconThermo[8] = {B00100,B01010,B01010,B01010,B01010,B01110,B01110,B00100};
 byte iconDrop[8]   = {B00100,B00100,B01010,B01010,B10001,B10001,B10001,B01110};
 byte iconWifi[8]   = {B00000,B00000,B10001,B01010,B00100,B00000,B00000,B00000};
 byte iconWifiErr[8]= {B00000,B10001,B01010,B00100,B00100,B01010,B10001,B00000};
 
-// ========================================================
 // FAST RECONNECT (EVENT-DRIVEN) + DEBOUNCE POPUP
-// ========================================================
 volatile bool wifiEventDisconnected = false;
 volatile bool wifiEventGotIP        = false;
 
@@ -193,9 +188,7 @@ void WiFiEventHandler(WiFiEvent_t event) {
   }
 }
 
-// ========================================================
 // EEPROM CONFIG
-// ========================================================
 void saveConfigToEEPROM() {
   EEPROM.put(EEPROM_ADDR_MAGIC, EEPROM_MAGIC);
   EEPROM.put(EEPROM_ADDR_SETPOINT, tempSetpoint);
@@ -218,9 +211,7 @@ void loadConfigFromEEPROM() {
   }
 }
 
-// ========================================================
 // LCD
-// ========================================================
 static String pad16(String s){
   if (s.length() > 16) return s.substring(0,16);
   while (s.length() < 16) s += ' ';
@@ -317,9 +308,7 @@ void lcd_task() {
   }
 }
 
-// ========================================================
 // DHT
-// ========================================================
 void read_dht22() {
   float hh = dht.readHumidity();
   float tt = dht.readTemperature();
@@ -343,9 +332,7 @@ void read_dht22() {
   }
 }
 
-// ========================================================
 // WiFi helpers
-// ========================================================
 static bool connectSavedWiFi(uint32_t timeoutMs = 15000) {
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
@@ -374,9 +361,7 @@ static bool connectSavedWiFi(uint32_t timeoutMs = 15000) {
   return false;
 }
 
-// ========================================================
 // WiFiManager Portal
-// ========================================================
 void startWiFiPortal(bool resetSettingsFirst) {
   Serial.println("[Portal] Start WiFiManager portal: ESP_001_SET");
 
@@ -408,14 +393,11 @@ void startWiFiPortal(bool resetSettingsFirst) {
   ESP.restart();
 }
 
-// ========================================================
 // checkWiFi (polling backup)
-// ========================================================
 void checkWiFi() {
   wl_status_t s = WiFi.status();
 
   if (s == WL_CONNECTED) {
-    // không popup ở đây nữa (event/debounce sẽ xử lý)
     wifiOK = true;
     wifiConnecting = false;
     return;
@@ -442,9 +424,7 @@ void checkWiFi() {
   }
 }
 
-// ========================================================
 // Firebase
-// ========================================================
 void firebaseInit() {
   config.api_key      = API_KEY;
   config.database_url = DATABASE_URL;
@@ -530,7 +510,7 @@ void uploadToFirebase() {
 
   timeClient.update();
 
-  // epoch UTC (bạn muốn UTC lưu DB)
+  // epoch UTC 
   time_t nowEpochUtc = (time_t)timeClient.getEpochTime() - utcOffsetInSeconds;
 
   String dayStr  = daysOfTheWeek[timeClient.getDay()];
@@ -551,7 +531,7 @@ void uploadToFirebase() {
     json.set("LOG/TEMP_LAST", tempLog);
     json.set("LOG/HUMI_LAST", humiLog);
 
-    // ✅ STATS: min/max theo ngày
+    // STATS: min/max theo ngày
     json.set("STATS/TMAX", tMaxStat);
     json.set("STATS/TMIN", tMinStat);
     json.set("STATS/HMAX", hMaxStat);
@@ -570,9 +550,7 @@ void uploadToFirebase() {
   }
 }
 
-// ========================================================
 // RESET_WIFI handler (Flutter)
-// ========================================================
 void handleResetWifiPortalFromFirebase() {
   Serial.println("[WiFi] RESET_WIFI=true -> open portal");
 
@@ -601,9 +579,7 @@ void clearResetWifiFlagAtBoot() {
   }
 }
 
-// ========================================================
 // WIFI EVENT PROCESS + DEBOUNCE POPUP
-// ========================================================
 void wifiEventTask() {
   unsigned long now = millis();
 
@@ -668,9 +644,7 @@ void wifiEventTask() {
   }
 }
 
-// ========================================================
 // LED blink task
-// ========================================================
 void ledTask() {
   unsigned long now = millis();
   if (now - lastLedToggle >= LED_BLINK_MS) {
@@ -680,9 +654,7 @@ void ledTask() {
   }
 }
 
-// ========================================================
 // SETUP
-// ========================================================
 void setup() {
   Serial.begin(115200);
   delay(200);
@@ -750,9 +722,7 @@ void setup() {
   lcd_show_main();
 }
 
-// ========================================================
 // LOOP
-// ========================================================
 void loop() {
   unsigned long now = millis();
   ledTask();
